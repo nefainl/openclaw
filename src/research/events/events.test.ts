@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as utils from "../../utils.js";
 import { redactEvent } from "./redaction.js";
 import { ResearchEventV1Schema } from "./types.js";
 
@@ -10,14 +11,14 @@ let tmpRoot = "";
 describe("research events", () => {
   beforeEach(async () => {
     tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-research-events-"));
-    process.env.OPENCLAW_STATE_DIR = tmpRoot;
+    vi.spyOn(utils, "resolveConfigDir").mockReturnValue(tmpRoot);
     delete process.env.OPENCLAW_RESEARCH_MAX_BYTES;
     delete process.env.OPENCLAW_RESEARCH_TTL_DAYS;
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await fs.rm(tmpRoot, { recursive: true, force: true });
-    delete process.env.OPENCLAW_STATE_DIR;
   });
 
   it("validates event variants", () => {
@@ -72,6 +73,48 @@ describe("research events", () => {
     await writer.close();
     const researchDir = path.join(tmpRoot, "research");
     await expect(fs.stat(researchDir)).rejects.toThrow();
+  });
+
+  it("does not write rl-feed when learning bridge is disabled", async () => {
+    const { createResearchRunContext } = await import("./runtime-hooks.js");
+    const ctx = createResearchRunContext({
+      cfg: { research: { enabled: true, learningBridge: { enabled: false } } } as never,
+      runId: "run-lb-off",
+      agentId: "default",
+      sessionId: "session-lb-off",
+    });
+    await ctx.emit({
+      kind: "tool.end",
+      payload: {
+        toolName: "exec",
+        toolCallId: "call-1",
+        ok: false,
+      },
+    });
+    await ctx.close();
+    await expect(fs.stat(path.join(tmpRoot, "rl-feed"))).rejects.toThrow();
+  });
+
+  it("writes rl-feed artifacts when learning bridge is enabled", async () => {
+    const { createResearchRunContext } = await import("./runtime-hooks.js");
+    const ctx = createResearchRunContext({
+      cfg: { research: { enabled: true, learningBridge: { enabled: true } } } as never,
+      runId: "run-lb-on",
+      agentId: "default",
+      sessionId: "session-lb-on",
+    });
+    await ctx.emit({
+      kind: "tool.end",
+      payload: {
+        toolName: "exec",
+        toolCallId: "call-1",
+        ok: false,
+      },
+    });
+    await ctx.close();
+    const rlRoot = path.join(tmpRoot, "rl-feed");
+    const entries = await fs.readdir(path.join(rlRoot, "trajectories"));
+    expect(entries.some((f) => f.endsWith(".jsonl"))).toBe(true);
   });
 
   it("writes redacted JSONL when enabled", async () => {

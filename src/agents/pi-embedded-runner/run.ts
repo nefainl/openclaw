@@ -495,12 +495,15 @@ export async function runEmbeddedPiAgent(
           const prompt =
             provider === "anthropic" ? scrubAnthropicRefusalMagic(params.prompt) : params.prompt;
 
+          const exportScrubbedContent =
+            params.config?.research?.learningBridge?.exportScrubbedContent === true;
           await research.emit({
             kind: "llm.request",
             payload: {
               provider,
               model: modelId,
               promptChars: params.prompt.length,
+              ...(exportScrubbedContent ? { promptScrubbed: prompt } : {}),
               imageCount: params.images?.length ?? 0,
             },
           });
@@ -613,6 +616,7 @@ export async function runEmbeddedPiAgent(
             timedOutDuringCompaction,
             sessionIdUsed,
             lastAssistant,
+            assistantTexts,
           } = attempt;
           endTimedOut = timedOut;
           bootstrapPromptWarningSignaturesSeen =
@@ -632,6 +636,11 @@ export async function runEmbeddedPiAgent(
               provider: lastAssistant?.provider ?? provider,
               model: lastAssistant?.model ?? modelId,
               stopReason: lastAssistant?.stopReason,
+              ...(exportScrubbedContent
+                ? {
+                    responseScrubbed: (assistantTexts.at(-1) ?? "").trim() || undefined,
+                  }
+                : {}),
               usage: {
                 input: lastAssistantUsage?.input,
                 output: lastAssistantUsage?.output,
