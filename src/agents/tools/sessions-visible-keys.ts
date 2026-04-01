@@ -33,6 +33,7 @@ export async function resolveVisibleSessionKeys(params: {
     requesterSessionKey: effectiveRequesterKey,
     visibility,
     a2aPolicy,
+    cfg,
   });
   // Omit `limit` unless the caller set it: default cap would drop visible keys for
   // workspaces with more sessions than the slice, breaking search/recall FTS filtering.

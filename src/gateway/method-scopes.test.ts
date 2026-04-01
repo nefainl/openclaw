@@ -19,6 +19,7 @@ describe("method scope resolution", () => {
     ["sessions.recall", ["operator.read"]],
     ["sessions.resolve", ["operator.read"]],
     ["config.schema.lookup", ["operator.read"]],
+    ["hive.sync", ["operator.admin"]],
     ["sessions.create", ["operator.write"]],
     ["sessions.send", ["operator.write"]],
     ["sessions.abort", ["operator.write"]],
